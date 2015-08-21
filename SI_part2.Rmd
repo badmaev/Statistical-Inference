@@ -1,0 +1,149 @@
+---
+title: "Statistical Inference Project - Part 2"
+author: "Boris Badmaev"
+date: "August 21, 2015"
+output: pdf_document
+---
+
+### Introduction
+
+This report uses the `ToothGrowth` data in the R datasets package. The goal of this analysis is to compare tooth growth by supp and dose. We will perform basic exploratory data analysis, provide summary of the data and use confidence intervals and/or hypothesis tests in order to come to our conclusions.
+
+### Data
+
+The `Toothdata` dataset shows the effect of Vitamin C on tooth growth in guinea pigs.The response is the length of odontoblasts (teeth) in each of 10 guinea pigs at each of three dose levels of Vitamin C (0.5, 1, and 2 mg) with each of two delivery methods (orange juice or ascorbic acid).
+
+The `Toothdata` data frame contains 60 observations on 3 variables:    
+* `len` - Tooth length (numeric)  
+* `supp` - Supplement type (VC or OJ)  
+* `dose` - Dose in milligrams  
+  
+Data Source:  C. I. Bliss (1952) The Statistics of Bioassay. Academic Press  
+References: McNeil, D. R. (1977) Interactive Data Analysis. New York: Wiley.  
+
+### Data Processing and Analysis
+
+```{r}
+library(datasets)
+data(ToothGrowth)
+attach(ToothGrowth)
+head(ToothGrowth, 15)
+```
+
+Let's explore the data frame
+
+```{r}
+str(ToothGrowth)
+```
+
+```{r}
+ToothGrowth$dose <- as.factor(ToothGrowth$dose)
+table(ToothGrowth$supp, ToothGrowth$dose)
+```
+```{r}
+summary(ToothGrowth)
+mean(ToothGrowth$len)
+sd(ToothGrowth$len)
+```
+Let's do some plotting
+```{r load ggplot2}
+require(ggplot2)
+```
+```{r global_options, include=FALSE}
+knitr::opts_chunk$set(dev="png", 
+               dev.args=list(type="cairo"),
+               dpi=96, fig.path="fig/")
+```
+```{r plots}
+g <- ggplot(ToothGrowth, aes(x=factor(dose),y=len,fill=factor(dose)))+
+            geom_boxplot(notch=FALSE) + facet_grid(.~supp) +
+            scale_x_discrete("Dosage (Milligram)") +   
+            scale_y_continuous("Length of Teeth") +  
+            ggtitle("Effect of Dosage and Supplement Type on Tooth Growth ")
+print(g)
+q <- ggplot(ToothGrowth, aes(x=factor(supp),y=len,fill=factor(supp)))+
+            geom_boxplot(notch=FALSE) + facet_grid(.~dose) +
+            scale_x_discrete("Delivery Method") +   
+            scale_y_continuous("Length of Teeth")
+print(q)
+
+```
+As we can see from these plots it seems like dosage has greater impact on tooth growth than the delivery method. Let's verify our hypotheses.
+
+We will use confidence intervals and/or hypothesis tests to compare tooth growth by supp and dose
+
+```{r supp}
+# T test for supplement by dose level
+dose0.5 <- subset(ToothGrowth, dose == 0.5)
+dose1.0 <- subset(ToothGrowth, dose == 1.0)
+dose2.0 <- subset(ToothGrowth, dose == 2.0)
+
+supp0.5<-t.test(len ~ supp, paired=FALSE, var.equal=TRUE, data = dose0.5)
+supp1.0<-t.test(len ~ supp, paired=FALSE, var.equal=TRUE, data = dose1.0)
+supp2.0<-t.test(len ~ supp, paired=FALSE, var.equal=TRUE, data = dose2.0)
+
+supp.result <- data.frame("p-value"=c(supp0.5$p.value, supp1.0$p.value, supp2.0$p.value),
+                          
+"Conf-Low"=c(supp0.5[["conf.int"]][1],supp1.0[["conf.int"]][1],supp2.0[["conf.int"]][1]),
+"Conf-High"=c(supp0.5[["conf.int"]][2],supp1.0[["conf.int"]][2], supp2.0[["conf.int"]][2]),
+row.names=c("Dose 0.5","Dose 1.0", "Dose 2.0"))
+
+supp.result
+```
+With assumptions that observations are not paired and different delivery methods have equal variance the results show small P-values (<0.01) and entirely positive confidence intervals for small dosages (0.5 and 1), that means we can reject Ho hypothesis. In other words changing of delivery method from ascorbic acid (VC) to orange juice (OJ) does change (increases) the average tooth length if we use small dosages (0.5 or 1). For dosage = 2.0 we observe large P-value and the confidence interval containing zero. That means we can't reject Ho hypothesis which means that for dosage = 2.o there is no change in tooth length when moving from VC to OJ delivery methods.
+
+Now let's test the Ho hypothesis to see if changing the dosage will impact the tooth growth within each group(VC and OJ)
+```{r dose}
+# subsetting based on supp and dosage change
+VC.dose0.5_1.0 <- subset(ToothGrowth, dose %in% c(0.5, 1.0) & supp=="VC")
+VC.dose0.5_2.0 <- subset(ToothGrowth, dose %in% c(0.5, 2.0) & supp=="VC")
+VC.dose1.0_2.0 <- subset(ToothGrowth, dose %in% c(1.0, 2.0) & supp=="VC")
+
+OJ.dose0.5_1.0 <- subset(ToothGrowth, dose %in% c(0.5, 1.0) & supp=="OJ")
+OJ.dose0.5_2.0 <- subset(ToothGrowth, dose %in% c(0.5, 2.0) & supp=="OJ")
+OJ.dose1.0_2.0 <- subset(ToothGrowth, dose %in% c(1.0, 2.0) & supp=="OJ")
+
+VCtest0.5_1.0<-t.test(len ~ dose, paired=FALSE, var.equal=TRUE, data = VC.dose0.5_1.0)
+VCtest0.5_2.0<-t.test(len ~ dose, paired=FALSE, var.equal=TRUE, data = VC.dose0.5_2.0)
+VCtest1.0_2.0<-t.test(len ~ dose, paired=FALSE, var.equal=TRUE, data = VC.dose1.0_2.0)
+
+OJtest0.5_1.0<-t.test(len ~ dose, paired=FALSE, var.equal=TRUE, data = OJ.dose0.5_1.0)
+OJtest0.5_2.0<-t.test(len ~ dose, paired=FALSE, var.equal=TRUE, data = OJ.dose0.5_2.0)
+OJtest1.0_2.0<-t.test(len ~ dose, paired=FALSE, var.equal=TRUE, data = OJ.dose1.0_2.0)
+
+VCdose.result <- data.frame("p-value"=c(VCtest0.5_1.0$p.value, 
+                                        VCtest0.5_2.0$p.value,                                                                       VCtest1.0_2.0$p.value),
+                          
+                        "Conf-Low"=c(VCtest0.5_1.0[["conf.int"]][1],
+                                     VCtest0.5_1.0[["conf.int"]][1],
+                                     VCtest1.0_2.0[["conf.int"]][1]),
+                        
+                        "Conf-High"=c(VCtest0.5_1.0[["conf.int"]][2],
+                                      VCtest0.5_1.0[["conf.int"]][2],
+                                      VCtest1.0_2.0[["conf.int"]][2]),
+                        
+                       row.names=c("VC 0.5-1.0","VC 0.5-2.0", "VC 1.0-2.0"))
+
+OJdose.result <- data.frame("p-value"=
+                                    c(OJtest0.5_1.0$p.value, 
+                                      OJtest0.5_2.0$p.value, 
+                                      OJtest1.0_2.0$p.value),
+                          
+                        "Conf-Low"=c(OJtest0.5_1.0[["conf.int"]][1],
+                                     OJtest0.5_1.0[["conf.int"]][1],
+                                     OJtest1.0_2.0[["conf.int"]][1]),
+                        
+                        "Conf-High"=c(OJtest0.5_1.0[["conf.int"]][2],
+                                      OJtest0.5_1.0[["conf.int"]][2],
+                                      OJtest1.0_2.0[["conf.int"]][2]),
+                        
+                       row.names=c("OJ 0.5-1.0","OJ 0.5-2.0", "OJ 1.0-2.0") )
+
+VCdose.result
+
+OJdose.result
+```
+
+With the same assumptions that observations are not paired and equal variances we see consistently very low p-values and confidence intervals not containing zero across both groups (OJ and VC) and across all possible dosage changes (0.5-1.0, 0.5-2.0 and 1.0-2.0). That allow us to reject Ho hypothesis and confirm the fact that changing of dosage (using VC or OJ delivery method) will likely lead to change in tooth length (increased dosage leads to increased tooth length).
+
+
